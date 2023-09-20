@@ -1,17 +1,27 @@
 import { injectable, inject } from "inversify";
-import { IUser } from "../types/express";
 import crypto from "crypto";
-import { hashPassword } from "../infrastructure/authentification/password-utils";
+
+import { IUser } from "../types/express";
+import {
+  hashPassword,
+  verifyPassword,
+} from "../infrastructure/authentification/password-utils";
 import UserModel from "../core/user-model";
 import { IUserRepository } from "../repositories/user-repository-interface";
 import { VoteValue } from "../types/vote";
-import {
+import { generateJWTToken } from "../infrastructure/authentification/jwt-utils";
+import * as Errors from "../core/errors";
+import { UserDTO } from "../core/user-dto";
+
+const {
   InvalidVoteValueError,
   VoterNotFoundError,
   UserToVoteForNotFoundError,
   CannotVoteForYourselfError,
   VotingRateLimitExceededError,
-} from "../core/errors";
+  UserNotFoundError,
+  PreconditionFailedError,
+} = Errors;
 
 @injectable()
 export class UserService {
@@ -48,27 +58,60 @@ export class UserService {
   }
 
   public async getUserById(userId: string): Promise<IUser | null> {
-    return this.userRepository.getUserById(userId);
+    const user = await this.userRepository.getUserById(userId);
+
+    if (!user || user.deleted_at != null) {
+      throw new UserNotFoundError("User not found");
+    }
+
+    return user;
   }
 
   public async getUsersWithPagination(
     page: number,
     pageSize: number
-  ): Promise<IUser[]> {
-    return this.userRepository.getUsersWithPagination(page, pageSize);
+  ): Promise<UserDTO[]> {
+    const users = await this.userRepository.getUsersWithPagination(
+      page,
+      pageSize
+    );
+
+    return users.map((user) => new UserDTO(user));
   }
 
   public async updateUser(
     userId: string,
-    updatedUser: IUser
+    updatedUser: IUser,
+    ifUnmodifiedSince: string
   ): Promise<IUser | null> {
-    return this.userRepository.updateUser(userId, updatedUser);
+    const user = await this.userRepository.getUserById(userId);
+
+    if (!user) {
+      throw new UserNotFoundError("User not found");
+    }
+
+    if (ifUnmodifiedSince) {
+      const lastModified = new Date(user.updated_at);
+      const ifUnmodifiedSinceDate = new Date(ifUnmodifiedSince);
+
+      if (lastModified > ifUnmodifiedSinceDate) {
+        throw new PreconditionFailedError("Resource has been modified");
+      }
+    }
+
+    const updatedUserData = await this.userRepository.updateUser(
+      userId,
+      updatedUser
+    );
+
+    return updatedUserData;
   }
 
   public async deleteUser(userId: string): Promise<IUser | null> {
     const user = await this.userRepository.getUserById(userId);
-    if (!user) {
-      return null;
+
+    if (!user || user.deleted_at !== null) {
+      throw new UserNotFoundError("User not found");
     }
 
     user.deleted_at = new Date();
@@ -78,7 +121,18 @@ export class UserService {
   }
 
   public async getUserByNickname(userNickname: string): Promise<IUser | null> {
-    return this.userRepository.getUserByNickname(userNickname);
+    try {
+      const user = await this.userRepository.getUserByNickname(userNickname);
+
+      if (!user || user?.deleted_at != null) {
+        throw new UserNotFoundError("User not found");
+      }
+
+      return user;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
   }
 
   public async updateRating(
@@ -130,5 +184,34 @@ export class UserService {
 
   private isValidVote(vote: number): boolean {
     return vote === VoteValue.Positive || vote === VoteValue.Negative;
+  }
+
+  public async loginUser(
+    nickname: string,
+    password: string
+  ): Promise<string | null> {
+    try {
+      const user = await this.userRepository.getUserByNickname(nickname);
+
+      if (!user || user.deleted_at != null) {
+        return null; // Return null to indicate authentication failure
+      }
+
+      const isPasswordValid = await verifyPassword(
+        password,
+        user.password,
+        user.salt
+      );
+
+      if (!isPasswordValid) {
+        return null; // Return null to indicate authentication failure
+      }
+
+      const token = generateJWTToken(user);
+      return token;
+    } catch (error) {
+      console.error(error);
+      throw error;
+    }
   }
 }

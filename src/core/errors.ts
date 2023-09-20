@@ -31,9 +31,17 @@ export class VotingRateLimitExceededError extends Error {
     this.name = "VotingRateLimitExceededError";
   }
 }
+
 export class UserNotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "UserNotFoundError";
+  }
+}
+
+export class PreconditionFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PreconditionFailedError";
   }
 }

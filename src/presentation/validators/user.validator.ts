@@ -1,5 +1,6 @@
 import Joi from "joi";
 import { UserRole } from "../../types/user-roles";
+import mongoose from "mongoose";
 
 export const createUserSchema = Joi.object({
   nickname: Joi.string().required(),
@@ -11,9 +12,16 @@ export const createUserSchema = Joi.object({
     .required(),
 });
 
-export const userIdSchema = Joi.string()
-  .regex(/^[0-9a-fA-F]{24}$/)
-  .required();
+export const userIdSchema = Joi.object({
+  userId: Joi.string()
+    .custom((value, helpers) => {
+      if (!mongoose.Types.ObjectId.isValid(value)) {
+        return helpers.error("any.invalid");
+      }
+      return value;
+    }, "MongoDB ObjectID")
+    .required(),
+});
 
 export const pageSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
@@ -35,3 +43,7 @@ export const loginUserSchema = Joi.object({
   nickname: Joi.string().required(),
   password: Joi.string().required(),
 });
+
+export const userIdValidation = Joi.string()
+  .regex(/^[0-9a-fA-F]{24}$/)
+  .required();

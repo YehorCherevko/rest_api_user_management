@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["express"],
+    "typeRoots": ["./src/types"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/presentation/controllers/user-controller.ts",
+    "src/application/user-service.ts"
+  ],
+  "exclude": ["node_modules"]
+}
